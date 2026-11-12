@@ -6,7 +6,7 @@ A cross-platform (**Windows, macOS, Linux**) interactive CLI add-on for [FreeLLM
 2. **Classifies providers & models** by quota style (`Keyless`, `High Quota`, `Moderate`, `Credit Wallet`, `Strict Cap`), context window (`128K`–`1M`), parameter tier, and tool capability.
 3. **Filters out clutter & tiny models** (safety/guard models like `Prompt Guard`/`Llama Guard`/`Qwen3Guard`, TTS/image/embedding routes, `<7B` peanut models, and `<32K` windows).
 4. **Builds budget-balanced chains** (`frontier-heavy`, `balanced-daily`, `fast-pool`) where each unique model is assigned **once** to the best-fit provider so you don't exhaust a single provider's quota.
-5. **Auto-checks & updates chains** on startup and after adding any provider, plus optionally syncs `~/.pi/agent/models.json` to expose **only** your FreeLLMAPI chains.
+5. **Auto-checks & updates chains** on startup and after adding any provider.
 
 ---
 
@@ -34,7 +34,6 @@ node freellmapi-setup-cli.mjs --db /path/to/freellmapi/server/data/freeapi.db
 | `--db <path>` | Explicit path to `freeapi.db` (auto-detected if run inside your FreeLLMAPI repo) |
 | `--scrape-only` | Scrape `freellmapi.co/models` and save `catalog-providers.json` without prompts |
 | `--check-chains` | Inspect local chains vs. recommended budget-balanced chains and exit |
-| `--sync-pi` | Clean `~/.pi/agent/models.json` so Pi's `/models` shows only your FreeLLMAPI chains |
 | `-h, --help` | Show usage help |
 
 ## Requirements
