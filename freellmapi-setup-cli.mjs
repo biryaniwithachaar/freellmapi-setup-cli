@@ -15,7 +15,6 @@
  */
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
@@ -55,11 +54,10 @@ function resolvePaths() {
     DB_PATH: dbPath,
     CATALOG_OUT_PATH: path.join(__dirname, 'catalog-providers.json'),
     KEYS_SHARED_TSX: path.join(repoRoot, 'client', 'src', 'components', 'keys', 'shared.tsx'),
-    PI_MODELS_PATH: path.join(os.homedir(), '.pi', 'agent', 'models.json'),
   };
 }
 
-const { ROOT, DB_PATH, CATALOG_OUT_PATH, KEYS_SHARED_TSX, PI_MODELS_PATH } = resolvePaths();
+const { ROOT, DB_PATH, CATALOG_OUT_PATH, KEYS_SHARED_TSX } = resolvePaths();
 const require = createRequire(path.join(ROOT, 'package.json'));
 const Database = require('better-sqlite3');
 
@@ -1088,44 +1086,6 @@ async function runAddWorkflow(db, rl, catalog, filterFn, titleLabel) {
   if (!addedAny) console.log(paint(c.gray, '\n  No new providers added.\n'));
 }
 
-function syncPiChainsOnly(db) {
-  if (!fs.existsSync(PI_MODELS_PATH)) {
-    console.log(paint(c.yellow, `  Pi models.json not found at ${PI_MODELS_PATH}. Skipping.\n`));
-    return false;
-  }
-  const cfg = JSON.parse(fs.readFileSync(PI_MODELS_PATH, 'utf8'));
-  if (!cfg?.providers?.freellmapi) {
-    console.log(paint(c.yellow, `  No "freellmapi" provider entry found in ${PI_MODELS_PATH}. Skipping.\n`));
-    return false;
-  }
-  const chains = db.prepare(`SELECT id, name, emoji FROM profiles WHERE type = 'custom' ORDER BY sort_order, id`).all();
-  if (chains.length === 0) {
-    console.log(paint(c.yellow, `  No custom chains in DB yet. Create chains first before syncing Pi.\n`));
-    return false;
-  }
-  cfg.providers.freellmapi.models = chains.map((p) => {
-    const rows = db.prepare(`
-      SELECT m.context_window FROM profile_models pm
-      JOIN models m ON m.id = pm.model_db_id
-      WHERE pm.profile_id = ?
-    `).all(p.id);
-    const ctxs = rows.map((r) => r.context_window || 131072).filter(Boolean);
-    const minCtx = ctxs.length ? Math.min(...ctxs) : 131072;
-    return {
-      id: `auto:${p.name}`,
-      name: `${p.emoji ? p.emoji + ' ' : ''}Auto: ${p.name} (${rows.length} models)`,
-      reasoning: false,
-      input: ['text'],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: minCtx,
-      maxTokens: 8192,
-    };
-  });
-  fs.writeFileSync(PI_MODELS_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
-  console.log(paint(c.brightGreen, `  ✓ Synced ${chains.length} chain(s) to ${PI_MODELS_PATH} (removed individual model clutter)\n`));
-  return true;
-}
-
 // ── Main Interactive Loop ─────────────────────────────────────────────────────
 async function main() {
   const args = new Set(process.argv.slice(2));
@@ -1140,14 +1100,12 @@ Options:
   --db <path>       Path to freeapi.db (auto-detected by default)
   --scrape-only     Scrape https://freellmapi.co/models & save catalog-providers.json
   --check-chains    Run chain diagnostics & exit
-  --sync-pi         Update ~/.pi/agent/models.json to expose only your FreeLLMAPI chains
   -h, --help        Show this help message
 `);
     return;
   }
   const scrapeOnly = args.has('--scrape-only');
   const checkChainsOnly = args.has('--check-chains');
-  const syncPiOnly = args.has('--sync-pi');
 
   console.clear?.();
   drawBox('FreeLLMAPI Universal Provider & Chain Manager', [
@@ -1175,10 +1133,6 @@ Options:
   const rl = createPrompter();
 
   try {
-    if (syncPiOnly) {
-      syncPiChainsOnly(db);
-      return;
-    }
     // 1. Always inspect & match chains on startup!
     await runChainCheck(db, rl, catalog, { autoPrompt: true });
     if (checkChainsOnly) return;
@@ -1194,7 +1148,6 @@ Options:
         `${c.brightCyan}[3]${c.reset} View full classified provider & quota table`,
         `${c.brightCyan}[4]${c.reset} Inspect & rebalance ${c.bold}Budget-Balanced Chains${c.reset} (frontier-heavy, balanced-daily, fast-pool)`,
         `${c.brightCyan}[5]${c.reset} Re-scrape ${c.gray}freellmapi.co/models${c.reset} & refresh ${c.gray}catalog-providers.json${c.reset}`,
-        `${c.brightCyan}[6]${c.reset} Sync Pi ${c.gray}models.json${c.reset} to chains-only`,
         `${c.brightCyan}[Q]${c.reset} Quit`,
       ], c.blue);
 
@@ -1234,8 +1187,6 @@ Options:
         Object.assign(catalog, fresh.catalog);
         console.log(paint(c.brightGreen, `  ✓ Refreshed catalog (v${catalog.catalogVersion}) -> ${path.relative(ROOT, CATALOG_OUT_PATH)}\n`));
         await runChainCheck(db, rl, catalog, { autoPrompt: true });
-      } else if (choice === '6') {
-        syncPiChainsOnly(db);
       }
     }
   } finally {
